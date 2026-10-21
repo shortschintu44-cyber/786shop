@@ -1,0 +1,363 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>786 Chicken Mart | Daily Rate Admin</title>
+<style>
+:root {
+  --red: #b51220;
+  --black: #171717;
+  --gold: #c9a45c;
+  --bg: #f5f5f5;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--bg);
+  color: var(--black);
+}
+header {
+  background: var(--black);
+  color: white;
+  padding: 24px 18px;
+  border-bottom: 4px solid var(--gold);
+}
+header h1 { margin: 0 0 6px; font-size: 25px; }
+header p { margin: 0; color: #ddd; font-size: 14px; }
+main { max-width: 1000px; margin: 25px auto; padding: 0 16px; }
+.panel {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 3px 15px #0000000c;
+  margin-bottom: 20px;
+}
+h2 { margin-top: 0; font-size: 20px; }
+.notice {
+  background: #fff4d8;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+th { font-size: 13px; color: #666; }
+input[type="text"], input[type="number"] {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid #ccc;
+  border-radius: 7px;
+  font-size: 15px;
+}
+input[type="number"] { min-width: 90px; }
+input:focus { outline: 2px solid #c9a45c; }
+label { font-size: 13px; }
+button {
+  border: 0;
+  border-radius: 7px;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+}
+.primary { background: var(--red); color: white; }
+.secondary { background: #eee; color: #222; }
+.gold { background: var(--gold); color: #171717; }
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.status { margin-top: 12px; font-size: 14px; }
+.availability { width: 18px; height: 18px; }
+.mobile-row { display: none; }
+footer {
+  text-align: center;
+  padding: 24px;
+  color: #777;
+  font-size: 13px;
+}
+@media(max-width:650px) {
+  main { padding: 0 10px; margin-top: 14px; }
+  .panel { padding: 14px; }
+  table, tbody, tr, td { display: block; width: 100%; }
+  thead { display: none; }
+  tr {
+    border: 1px solid #eee;
+    border-radius: 9px;
+    margin-bottom: 14px;
+    padding: 10px;
+  }
+  td { border: 0; padding: 6px 0; }
+  td::before {
+    content: attr(data-label);
+    display: block;
+    color: #777;
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>786 Chicken Mart</h1>
+  <p>Admin Panel · Daily Product Rates</p>
+</header>
+
+<main>
+  <div class="panel">
+    <h2>Today's Rates</h2>
+    <div class="notice">
+      Update the price in rupees per kilogram and press
+      <b>Save Daily Rates</b>. Changes are stored in this browser.
+    </div>
+    <p id="today"></p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Product Name</th>
+          <th>Price (₹/kg)</th>
+          <th>Available</th>
+        </tr>
+      </thead>
+      <tbody id="productRows"></tbody>
+    </table>
+
+    <div class="actions">
+      <button class="primary" id="saveBtn">Save Daily Rates</button>
+      <button class="secondary" id="resetBtn">Restore Default Rates</button>
+      <button class="gold" id="exportBtn">Export Backup</button>
+      <button class="secondary" id="importBtn">Import Backup</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="panel">
+    <h2>How it works</h2>
+    <ul>
+      <li>Enter the new rate for each product.</li>
+      <li>Untick Available to hide a product from the shop.</li>
+      <li>Click Save Daily Rates before closing the page.</li>
+      <li>Export a backup before changing computers or browsers.</li>
+    </ul>
+    <p class="notice">
+      This page has no login protection. Do not publish it publicly as a
+      secure admin system. Use a password-protected backend for a live shop.
+    </p>
+  </div>
+</main>
+
+<footer>786 Chicken Mart · Freshness you can trust</footer>
+
+<script>
+"use strict";
+
+const STORAGE_KEY = "786cm_products_v1";
+
+const DEFAULT_PRODUCTS = [
+  { id: "broiler", name: "Broiler Chicken", price: 260, available: true },
+  { id: "skinless", name: "Broiler Skinless", price: 280, available: true },
+  { id: "broiler-live", name: "Broiler Live", price: 136, available: true },
+  { id: "layer", name: "Layer Chicken", price: 230, available: true },
+  { id: "farm-live", name: "Farm Live", price: 135, available: true }
+];
+
+let products = loadProducts();
+
+document.getElementById("today").textContent =
+  "Date: " + new Date().toLocaleDateString("en-IN", {
+    day: "2-digit", month: "long", year: "numeric"
+  });
+
+function loadProducts() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return structuredClone(DEFAULT_PRODUCTS);
+
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) throw new Error("Invalid data");
+
+    return DEFAULT_PRODUCTS.map(defaultProduct => {
+      const savedProduct = parsed.find(p => p.id === defaultProduct.id);
+      if (!savedProduct) return { ...defaultProduct };
+
+      return {
+        id: defaultProduct.id,
+        name: typeof savedProduct.name === "string"
+          ? savedProduct.name : defaultProduct.name,
+        price: Number.isFinite(Number(savedProduct.price)) &&
+          Number(savedProduct.price) >= 0
+          ? Number(savedProduct.price) : defaultProduct.price,
+        available: typeof savedProduct.available === "boolean"
+          ? savedProduct.available : defaultProduct.available
+      };
+    });
+  } catch {
+    return structuredClone(DEFAULT_PRODUCTS);
+  }
+}
+
+function renderProducts() {
+  const tbody = document.getElementById("productRows");
+  tbody.replaceChildren();
+
+  products.forEach((product, index) => {
+    const tr = document.createElement("tr");
+
+    const nameCell = document.createElement("td");
+    nameCell.dataset.label = "Product Name";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = product.name;
+    nameInput.maxLength = 80;
+    nameInput.setAttribute("aria-label", "Product name");
+    nameInput.addEventListener("input", () => {
+      products[index].name = nameInput.value;
+    });
+    nameCell.appendChild(nameInput);
+
+    const priceCell = document.createElement("td");
+    priceCell.dataset.label = "Price (₹/kg)";
+    const priceInput = document.createElement("input");
+    priceInput.type = "number";
+    priceInput.min = "0";
+    priceInput.max = "100000";
+    priceInput.step = "0.01";
+    priceInput.value = product.price;
+    priceInput.required = true;
+    priceInput.setAttribute("aria-label", "Price in rupees per kg");
+    priceInput.addEventListener("input", () => {
+      products[index].price = priceInput.value;
+    });
+    priceCell.appendChild(priceInput);
+
+    const availabilityCell = document.createElement("td");
+    availabilityCell.dataset.label = "Available";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "availability";
+    checkbox.checked = product.available;
+    checkbox.setAttribute("aria-label", "Product available");
+    checkbox.addEventListener("change", () => {
+      products[index].available = checkbox.checked;
+    });
+    availabilityCell.appendChild(checkbox);
+
+    tr.append(nameCell, priceCell, availabilityCell);
+    tbody.appendChild(tr);
+  });
+}
+
+function saveProducts() {
+  const rows = [...document.querySelectorAll("#productRows tr")];
+
+  for (let i = 0; i < rows.length; i++) {
+    const name = rows[i].querySelector('input[type="text"]').value.trim();
+    const priceInput = rows[i].querySelector('input[type="number"]');
+    const price = Number(priceInput.value);
+
+    if (!name) {
+      showStatus("Please enter a name for every product.", true);
+      return;
+    }
+    if (priceInput.value === "" || !Number.isFinite(price) ||
+        price < 0 || price > 100000) {
+      showStatus("Enter a valid price between ₹0 and ₹100,000.", true);
+      priceInput.focus();
+      return;
+    }
+
+    products[i].name = name;
+    products[i].price = price;
+  }
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+    showStatus("Daily rates saved successfully.");
+  } catch {
+    showStatus("Could not save. Check browser storage settings.", true);
+  }
+}
+
+function showStatus(message, isError = false) {
+  const el = document.getElementById("status");
+  el.textContent = message;
+  el.style.color = isError ? "#b51220" : "#18733b";
+}
+
+document.getElementById("saveBtn").addEventListener("click", saveProducts);
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!confirm("Restore all five default product names and rates?")) return;
+  products = structuredClone(DEFAULT_PRODUCTS);
+  renderProducts();
+  saveProducts();
+});
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(products, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "786-chicken-mart-rates.json";
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("importBtn").addEventListener("click", () => {
+  document.getElementById("importFile").click();
+});
+
+document.getElementById("importFile").addEventListener("change", async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const imported = JSON.parse(await file.text());
+    if (!Array.isArray(imported)) throw new Error("Invalid file");
+
+    const validated = DEFAULT_PRODUCTS.map(defaultProduct => {
+      const item = imported.find(p => p.id === defaultProduct.id);
+      if (!item) return { ...defaultProduct };
+      if (typeof item.name !== "string" ||
+          !Number.isFinite(Number(item.price)) ||
+          Number(item.price) < 0 || Number(item.price) > 100000 ||
+          typeof item.available !== "boolean") {
+        throw new Error("Invalid product data");
+      }
+      return {
+        id: defaultProduct.id,
+        name: item.name,
+        price: Number(item.price),
+        available: item.available
+      };
+    });
+
+    products = validated;
+    renderProducts();
+    saveProducts();
+  } catch {
+    showStatus("Invalid backup file. No rates were imported.", true);
+  } finally {
+    event.target.value = "";
+  }
+});
+
+renderProducts();
+</script>
+</body>
+</html>
